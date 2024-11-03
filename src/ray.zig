@@ -25,19 +25,3 @@ pub const Ray = struct {
         return self.orig.add(self.dir.mulScalar(t));
     }
 };
-
-pub fn hit_sphere(center: Vec3, radius: f64, r: Ray) f64 {
-    // P - C
-    var oc: Vec3 = r.orig.sub(center);
-    const a = r.dir.dot(r.dir);
-    const b = oc.dot(r.dir) * 2.0;
-    const c = oc.dot(oc) - radius * radius;
-
-    const discriminant = b * b - 4 * a * c;
-
-    if (discriminant < 0) {
-        return -1.0;
-    } else {
-        return (-b - std.math.sqrt(discriminant)) / (2.0 * a);
-    }
-}

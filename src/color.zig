@@ -1,6 +1,7 @@
 const std = @import("std");
 const ImageFile = @import("image.zig");
 const RayFile = @import("ray.zig");
+const HittableFile = @import("hittable.zig");
 const Image = ImageFile.Image;
 const RGB = ImageFile.RGB;
 const Vec3 = @import("vec.zig").Vec3;
@@ -16,12 +17,12 @@ pub fn Color3_to_RGB(color: Color3) RGB {
     };
 }
 
-pub fn ray_color(ray: Ray) Color3 {
-    const t = RayFile.hit_sphere(Vec3.init(0, 0, -1), 0.5, ray);
-    if (t > 0.0) {
-        const n: Vec3 = ray.at(t).sub(Vec3.init(0, 0, -1)).unit_vector();
-        return n.add(Color3.init(1, 1, 1)).mulScalar(0.5);
+pub fn ray_color(ray: Ray, world: *HittableFile.HittableList) Color3 {
+    var rec: HittableFile.hit_record = undefined;
+    if (world.hit(ray, 0, std.math.inf(f64), &rec)) {
+        return rec.normal.add(Color3.init(1, 1, 1)).mulScalar(0.5);
     }
+
     const unit_direction = ray.dir.unit_vector();
     const a = 0.5 * (unit_direction.Y() + 1);
     return Color3.init(1.0, 1.0, 1.0).mulScalar(1.0 - a).add(Color3.init(0.5, 0.7, 1.0).mulScalar(a));
@@ -55,6 +56,13 @@ pub fn MakeImage() !void {
     const allocator = std.heap.page_allocator;
     var image: Image = try Image.init(allocator, image_width, image_height);
 
+    // World
+    var world = try HittableFile.HittableList.init(allocator);
+    var sphere = HittableFile.Sphere.init(Vec3.init(0, 0, -1), 0.5);
+    var ground = HittableFile.Sphere.init(Vec3.init(0, -100.5, -1), 100);
+    try world.objects.append(HittableFile.HittableObj{ .ctx = &ground, .hittable = ground.hittable() });
+    try world.objects.append(HittableFile.HittableObj{ .ctx = &sphere, .hittable = sphere.hittable() });
+
     // free memory
     defer image.deinit();
 
@@ -68,11 +76,8 @@ pub fn MakeImage() !void {
             const ray_direction = pixel_center.sub(camera_center);
 
             const ray = Ray.init(camera_center, ray_direction);
-            // const r: f64 = @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(image.width - 1));
-            // const g: f64 = @as(f64, @floatFromInt(j)) / @as(f64, @floatFromInt(image.height - 1));
-            // const b: f64 = 0.0;
 
-            var col = ray_color(ray);
+            var col = ray_color(ray, &world);
             col = col.mulScalar(255.999);
 
             const index = i + j * image.width;
