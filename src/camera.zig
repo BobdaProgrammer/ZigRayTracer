@@ -80,10 +80,20 @@ pub const Camera = struct {
     const Color3 = Vec3;
 
     pub fn Color3_to_RGB(color: Color3) RGB {
+        const r = color.X();
+        const g = color.Y();
+        const b = color.Z();
+
+        const intensity = Interval.init(0.000, 0.999);
+
+        const rbyte = @as(u8, @intFromFloat(256 * intensity.clamp(r)));
+        const gbyte = @as(u8, @intFromFloat(256 * intensity.clamp(g)));
+        const bbyte = @as(u8, @intFromFloat(256 * intensity.clamp(b)));
+
         return RGB{
-            .r = @intFromFloat(color.X()),
-            .g = @intFromFloat(color.Y()),
-            .b = @intFromFloat(color.Z()),
+            .r = rbyte,
+            .g = gbyte,
+            .b = bbyte,
         };
     }
 
