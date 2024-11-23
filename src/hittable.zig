@@ -1,5 +1,6 @@
 const Vec3 = @import("vec.zig").Vec3;
 const RayFile = @import("ray.zig");
+const Interval = @import("interval.zig").Interval;
 const std = @import("std");
 
 pub const hit_record = struct {
@@ -20,18 +21,12 @@ pub const Hittable = struct {
     ptr: *anyopaque,
     vtable: VTable,
     pub const VTable = struct {
-        hit: *const fn (ctx: *anyopaque, r: RayFile.Ray, ray_tmin: f64, ray_tmax: f64, rec: *hit_record) bool,
+        hit: *const fn (ctx: *anyopaque, r: RayFile.Ray, ray_t: Interval, rec: *hit_record) bool,
     };
 
-    pub fn raw_hit(self: Hittable, r: RayFile.Ray, ray_tmin: f64, ray_tmax: f64, rec: *hit_record, return_addr: *anyopaque) bool {
-        return self.Vtable.hit(self.ptr, r, ray_tmin, ray_tmax, rec, return_addr);
+    pub fn raw_hit(self: Hittable, r: RayFile.Ray, ray_t: Interval, rec: *hit_record, return_addr: *anyopaque) bool {
+        return self.Vtable.hit(self.ptr, r, ray_t, rec, return_addr);
     }
-};
-
-// hittable object template
-pub const HittableObj = struct {
-    ctx: *anyopaque,
-    hittable: Hittable,
 };
 
 // sphere implementation
@@ -45,7 +40,7 @@ pub const Sphere = struct {
     }
 
     // returns wether a ray has hit the circle or not
-    pub fn hit(ctx: *anyopaque, r: RayFile.Ray, ray_tmin: f64, ray_tmax: f64, rec: *hit_record) bool {
+    pub fn hit(ctx: *anyopaque, r: RayFile.Ray, ray_t: Interval, rec: *hit_record) bool {
         const self: *Sphere = @ptrCast(@alignCast(ctx));
 
         // x^2+y^2+z^2=r^2
@@ -73,9 +68,9 @@ pub const Sphere = struct {
 
         // find nearest root in acceptable range
         var root = (-h - sqrtd) / a;
-        if (root <= ray_tmin or ray_tmax <= root) {
-            root = (h + sqrtd) / a;
-            if (root >= ray_tmin or ray_tmax <= root) {
+        if (!ray_t.surrounds(root)) {
+            root = (-h + sqrtd) / a;
+            if (!ray_t.surrounds(root)) {
                 return false;
             }
         }
@@ -97,24 +92,24 @@ pub const Sphere = struct {
 
 // world scene, a list of hittable objects
 pub const HittableList = struct {
-    objects: std.ArrayList(HittableObj),
+    objects: std.ArrayList(Hittable),
 
     // initiate an empty list of hittable objects with an allocator
     pub fn init(allocator: std.mem.Allocator) !HittableList {
         return HittableList{
-            .objects = std.ArrayList(HittableObj).init(allocator),
+            .objects = std.ArrayList(Hittable).init(allocator),
         };
     }
 
     // returns if any of the objects in the HittableList were hit
-    pub fn hit(self: *HittableList, r: RayFile.Ray, ray_tmin: f64, ray_tmax: f64, rec: *hit_record) bool {
+    pub fn hit(self: *const HittableList, r: RayFile.Ray, ray_t: Interval, rec: *hit_record) bool {
         var temp_rec: hit_record = undefined;
         var hit_anything: bool = false;
-        var closest_so_far: f64 = ray_tmax;
+        var closest_so_far: f64 = ray_t.max;
 
         // loops through all items and checks if they have been hit
         for (self.objects.items) |object| {
-            const @"hitSummin?" = object.hittable.vtable.hit(object.ctx, r, ray_tmin, ray_tmax, &temp_rec);
+            const @"hitSummin?" = object.vtable.hit(object.ptr, r, Interval.init(ray_t.min, closest_so_far), &temp_rec);
             if (@"hitSummin?") {
                 hit_anything = true;
                 closest_so_far = temp_rec.t;
